@@ -1,0 +1,112 @@
+{
+	"95d33319-817f-4542-8701-39a05cbc18be": {
+		"task": "dataExport",
+		"label": "SQLASs1",
+		"description": "",
+		"createTime": "202606192346",
+		"updateTime": "202606192346",
+		"state": {
+			"producers": [
+				{
+					"type": "databaseTransferProducer",
+					"location": {
+						"type": "query",
+						"project": "General",
+						"dataSource": "postgres-jdbc-19e8cb2e9b0-2d7b24af46d25818",
+						"query": "DROP TABLE IF EXISTS Enrollments, FitnessClasses, Trainers, Members, Memberships CASCADE;\r\n\r\nCREATE TABLE Memberships (\r\n    MembershipID SERIAL PRIMARY KEY,\r\n    TypeName VARCHAR(50) NOT NULL,\r\n    Price DECIMAL(10, 2) NOT NULL\r\n);\r\n\r\nCREATE TABLE Members (\r\n    MemberID SERIAL PRIMARY KEY,\r\n    FullName VARCHAR(100) NOT NULL,\r\n    Email VARCHAR(100),\r\n    MembershipID INT REFERENCES Memberships(MembershipID)\r\n);\r\n\r\nCREATE TABLE Trainers (\r\n    TrainerID SERIAL PRIMARY KEY,\r\n    TrainerName VARCHAR(100) NOT NULL,\r\n    Specialization VARCHAR(50)\r\n);\r\n\r\nCREATE TABLE FitnessClasses (\r\n    ClassID SERIAL PRIMARY KEY,\r\n    ClassName VARCHAR(100) NOT NULL,\r\n    TrainerID INT REFERENCES Trainers(TrainerID),\r\n    ClassDate TIMESTAMP NOT NULL\r\n);\r\n\r\nCREATE TABLE Enrollments (\r\n    EnrollmentID SERIAL PRIMARY KEY,\r\n    MemberID INT REFERENCES Members(MemberID),\r\n    ClassID INT REFERENCES FitnessClasses(ClassID),\r\n    Status VARCHAR(20) DEFAULT \u0027Confirmed\u0027\r\n);\r\n\r\nTRUNCATE TABLE Enrollments, FitnessClasses, Trainers, Members, Memberships RESTART IDENTITY CASCADE;\r\n\r\nINSERT INTO Memberships (TypeName, Price)\r\nSELECT \r\n    \u0027Абонемент типу \u0027 || i,\r\n    (random() * 9000 + 1000)::numeric(10,2) \r\nFROM generate_series(1, 10000) AS s(i);\r\n\r\nINSERT INTO Members (FullName, Email, MembershipID)\r\nSELECT \r\n    \u0027Клієнт \u0027 || i, \r\n    \u0027client\u0027 || i || \u0027@kse-test.com\u0027, \r\n    floor(random() * 10000 + 1)::int\r\nFROM generate_series(1, 10000) AS s(i);\r\n\r\nINSERT INTO Trainers (TrainerName, Specialization)\r\nSELECT \r\n    \u0027Тренер \u0027 || i,\r\n    (ARRAY[\u0027Кросфіт\u0027, \u0027Йога\u0027, \u0027Бокс\u0027, \u0027Пілатес\u0027, \u0027Бодібілдинг\u0027])[floor(random() * 5 + 1)]\r\nFROM generate_series(1, 10000) AS s(i);\r\n\r\nINSERT INTO FitnessClasses (ClassName, TrainerID, ClassDate)\r\nSELECT \r\n    \u0027Групове заняття \u0027 || s.i::text,\r\n    floor(random() * 10000 + 1)::int,\r\n    NOW() + (random() * (interval \u002760 days\u0027))\r\nFROM generate_series(1, 10000) AS s(i);\r\n\r\n\r\nINSERT INTO Enrollments (MemberID, ClassID, Status)\r\nSELECT \r\n    floor(random() * 10000 + 1)::int, \r\n    floor(random() * 10000 + 1)::int, \r\n    (ARRAY[\u0027Confirmed\u0027, \u0027Cancelled\u0027, \u0027Waitlist\u0027])[floor(random() * 3 + 1)]\r\nFROM generate_series(1, 10000) AS s(i);\r\n\r\n\r\n\r\n\r\n\r\n\r\nWITH ConfirmedEnrollments AS (\r\n\r\n    SELECT \r\n        m.FullName AS ClientName,\r\n        ms.TypeName AS MembershipType,\r\n        fc.ClassName,\r\n        t.TrainerName,\r\n        fc.ClassDate\r\n    FROM Enrollments e\r\n    JOIN Members m ON e.MemberID \u003d m.MemberID\r\n    JOIN Memberships ms ON m.MembershipID \u003d ms.MembershipID\r\n    JOIN FitnessClasses fc ON e.ClassID \u003d fc.ClassID\r\n    JOIN Trainers t ON fc.TrainerID \u003d t.TrainerID\r\n    WHERE e.Status \u003d \u0027Confirmed\u0027\r\n)\r\nSELECT \r\n    ClientName,\r\n    MembershipType,\r\n    COUNT(ClassName) AS TotalClasses,\r\n    COUNT(DISTINCT TrainerName) AS UniqueTrainersCount\r\nFROM ConfirmedEnrollments\r\n\r\nWHERE ClassDate \u003e\u003d \u00272026-06-01 00:00:00\u0027 \r\nGROUP BY \r\n    ClientName, \r\n    MembershipType\r\n\r\nORDER BY \r\n    TotalClasses DESC, \r\n    ClientName ASC\r\nLIMIT 100;\r\n\r\nSELECT \r\n    FullName AS PersonName, \r\n    Email AS ContactInfo, \r\n    \u0027Клієнт\u0027 AS Role \r\nFROM Members\r\nUNION ALL\r\nSELECT \r\n    TrainerName AS PersonName, \r\n    Specialization AS ContactInfo, \r\n    \u0027Тренер\u0027 AS Role \r\nFROM Trainers\r\nLIMIT 100"
+					}
+				}
+			],
+			"consumers": [
+				{
+					"type": "databaseTransferConsumer"
+				}
+			],
+			"configuration": {
+				"maxJobCount": 1,
+				"showFinalMessage": true,
+				"DatabaseTransferProducer": {
+					"extractType": "SINGLE_QUERY",
+					"segmentSize": 100000,
+					"fetchSize": 10000,
+					"openNewConnections": false,
+					"queryRowCount": false,
+					"fetchedRowsOnly": false,
+					"selectedColumnsOnly": false,
+					"selectedRowsOnly": false
+				},
+				"DatabaseTransferConsumer": {
+					"entityId": "postgres-jdbc-19e8cb2e9b0-2d7b24af46d25818/postgres/public",
+					"openNewConnections": true,
+					"useTransactions": true,
+					"commitAfterRows": 10000,
+					"useMultiRowInsert": false,
+					"multiRowInsertBatch": 500,
+					"skipBindValues": false,
+					"disableUsingBatches": true,
+					"ignoreDuplicateRows": false,
+					"onDuplicateKeyMethod": "",
+					"transferAutoGeneratedColumns": true,
+					"disableReferentialIntegrity": false,
+					"useBulkLoad": false,
+					"truncateBeforeLoad": false,
+					"openTableOnFinish": true,
+					"enableQmLogging": false,
+					"mappings": {
+						"postgres-jdbc-19e8cb2e9b0-2d7b24af46d25818/DROP TABLE IF EXISTS Enrollments, FitnessClasses, Trainers, Members, Memberships CASCADE;\r\n\r\nCREATE TABLE Memberships (\r\n    MembershipID SERIAL PRIMARY KEY,\r\n    TypeName VARCHAR(50) NOT NULL,\r\n    Price DECIMAL(10, 2) NOT NULL\r\n);\r\n\r\nCREATE TABLE Members (\r\n    MemberID SERIAL PRIMARY KEY,\r\n    FullName VARCHAR(100) NOT NULL,\r\n    Email VARCHAR(100),\r\n    MembershipID INT REFERENCES Memberships(MembershipID)\r\n);\r\n\r\nCREATE TABLE Trainers (\r\n    TrainerID SERIAL PRIMARY KEY,\r\n    TrainerName VARCHAR(100) NOT NULL,\r\n    Specialization VARCHAR(50)\r\n);\r\n\r\nCREATE TABLE FitnessClasses (\r\n    ClassID SERIAL PRIMARY KEY,\r\n    ClassName VARCHAR(100) NOT NULL,\r\n    TrainerID INT REFERENCES Trainers(TrainerID),\r\n    ClassDate TIMESTAMP NOT NULL\r\n);\r\n\r\nCREATE TABLE Enrollments (\r\n    EnrollmentID SERIAL PRIMARY KEY,\r\n    MemberID INT REFERENCES Members(MemberID),\r\n    ClassID INT REFERENCES FitnessClasses(ClassID),\r\n    Status VARCHAR(20) DEFAULT \u0027Confirmed\u0027\r\n);\r\n\r\nTRUNCATE TABLE Enrollments, FitnessClasses, Trainers, Members, Memberships RESTART IDENTITY CASCADE;\r\n\r\nINSERT INTO Memberships (TypeName, Price)\r\nSELECT \r\n    \u0027Абонемент типу \u0027 || i,\r\n    (random() * 9000 + 1000)::numeric(10,2) \r\nFROM generate_series(1, 10000) AS s(i);\r\n\r\nINSERT INTO Members (FullName, Email, MembershipID)\r\nSELECT \r\n    \u0027Клієнт \u0027 || i, \r\n    \u0027client\u0027 || i || \u0027@kse-test.com\u0027, \r\n    floor(random() * 10000 + 1)::int\r\nFROM generate_series(1, 10000) AS s(i);\r\n\r\nINSERT INTO Trainers (TrainerName, Specialization)\r\nSELECT \r\n    \u0027Тренер \u0027 || i,\r\n    (ARRAY[\u0027Кросфіт\u0027, \u0027Йога\u0027, \u0027Бокс\u0027, \u0027Пілатес\u0027, \u0027Бодібілдинг\u0027])[floor(random() * 5 + 1)]\r\nFROM generate_series(1, 10000) AS s(i);\r\n\r\nINSERT INTO FitnessClasses (ClassName, TrainerID, ClassDate)\r\nSELECT \r\n    \u0027Групове заняття \u0027 || s.i::text,\r\n    floor(random() * 10000 + 1)::int,\r\n    NOW() + (random() * (interval \u002760 days\u0027))\r\nFROM generate_series(1, 10000) AS s(i);\r\n\r\n\r\nINSERT INTO Enrollments (MemberID, ClassID, Status)\r\nSELECT \r\n    floor(random() * 10000 + 1)::int, \r\n    floor(random() * 10000 + 1)::int, \r\n    (ARRAY[\u0027Confirmed\u0027, \u0027Cancelled\u0027, \u0027Waitlist\u0027])[floor(random() * 3 + 1)]\r\nFROM generate_series(1, 10000) AS s(i);\r\n\r\n\r\n\r\n\r\n\r\n\r\nWITH ConfirmedEnrollments AS (\r\n\r\n    SELECT \r\n        m.FullName AS ClientName,\r\n        ms.TypeName AS MembershipType,\r\n        fc.ClassName,\r\n        t.TrainerName,\r\n        fc.ClassDate\r\n    FROM Enrollments e\r\n    JOIN Members m ON e.MemberID \u003d m.MemberID\r\n    JOIN Memberships ms ON m.MembershipID \u003d ms.MembershipID\r\n    JOIN FitnessClasses fc ON e.ClassID \u003d fc.ClassID\r\n    JOIN Trainers t ON fc.TrainerID \u003d t.TrainerID\r\n    WHERE e.Status \u003d \u0027Confirmed\u0027\r\n)\r\nSELECT \r\n    ClientName,\r\n    MembershipType,\r\n    COUNT(ClassName) AS TotalClasses,\r\n    COUNT(DISTINCT TrainerName) AS UniqueTrainersCount\r\nFROM ConfirmedEnrollments\r\n\r\nWHERE ClassDate \u003e\u003d \u00272026-06-01 00:00:00\u0027 \r\nGROUP BY \r\n    ClientName, \r\n    MembershipType\r\n\r\nORDER BY \r\n    TotalClasses DESC, \r\n    ClientName ASC\r\nLIMIT 100;\r\n\r\nSELECT \r\n    FullName AS PersonName, \r\n    Email AS ContactInfo, \r\n    \u0027Клієнт\u0027 AS Role \r\nFROM Members\r\nUNION ALL\r\nSELECT \r\n    TrainerName AS PersonName, \r\n    Specialization AS ContactInfo, \r\n    \u0027Тренер\u0027 AS Role \r\nFROM Trainers\r\nLIMIT 100": {
+							"targetName": "\"DROP TABLE IF EXISTS Enrollments, FitnessClasses, Trainers, Members, Memberships CASCADE;\r\n\r\nCREATE TABLE Memberships (\r\n    MembershipID SERIAL PRIMARY KEY,\r\n    TypeName VARCHAR(50) NOT NULL,\r\n    Price DECIMAL(10, 2) NOT NULL\r\n);\r\n\r\nCREATE TABLE Members (\r\n    MemberID SERIAL PRIMARY KEY,\r\n    FullName VARCHAR(100) NOT NULL,\r\n    Email VARCHAR(100),\r\n    MembershipID INT REFERENCES Memberships(MembershipID)\r\n);\r\n\r\nCREATE TABLE Trainers (\r\n    TrainerID SERIAL PRIMARY KEY,\r\n    TrainerName VARCHAR(100) NOT NULL,\r\n    Specialization VARCHAR(50)\r\n);\r\n\r\nCREATE TABLE FitnessClasses (\r\n    ClassID SERIAL PRIMARY KEY,\r\n    ClassName VARCHAR(100) NOT NULL,\r\n    TrainerID INT REFERENCES Trainers(TrainerID),\r\n    ClassDate TIMESTAMP NOT NULL\r\n);\r\n\r\nCREATE TABLE Enrollments (\r\n    EnrollmentID SERIAL PRIMARY KEY,\r\n    MemberID INT REFERENCES Members(MemberID),\r\n    ClassID INT REFERENCES FitnessClasses(ClassID),\r\n    Status VARCHAR(20) DEFAULT \u0027Confirmed\u0027\r\n);\r\n\r\nTRUNCATE TABLE Enrollments, FitnessClasses, Trainers, Members, Memberships RESTART IDENTITY CASCADE;\r\n\r\nINSERT INTO Memberships (TypeName, Price)\r\nSELECT \r\n    \u0027Абонемент типу \u0027 || i,\r\n    (random() * 9000 + 1000)::numeric(10,2) \r\nFROM generate_series(1, 10000) AS s(i);\r\n\r\nINSERT INTO Members (FullName, Email, MembershipID)\r\nSELECT \r\n    \u0027Клієнт \u0027 || i, \r\n    \u0027client\u0027 || i || \u0027@kse-test.com\u0027, \r\n    floor(random() * 10000 + 1)::int\r\nFROM generate_series(1, 10000) AS s(i);\r\n\r\nINSERT INTO Trainers (TrainerName, Specialization)\r\nSELECT \r\n    \u0027Тренер \u0027 || i,\r\n    (ARRAY[\u0027Кросфіт\u0027, \u0027Йога\u0027, \u0027Бокс\u0027, \u0027Пілатес\u0027, \u0027Бодібілдинг\u0027])[floor(random() * 5 + 1)]\r\nFROM generate_series(1, 10000) AS s(i);\r\n\r\nINSERT INTO FitnessClasses (ClassName, TrainerID, ClassDate)\r\nSELECT \r\n    \u0027Групове заняття \u0027 || s.i::text,\r\n    floor(random() * 10000 + 1)::int,\r\n    NOW() + (random() * (interval \u002760 days\u0027))\r\nFROM generate_series(1, 10000) AS s(i);\r\n\r\n\r\nINSERT INTO Enrollments (MemberID, ClassID, Status)\r\nSELECT \r\n    floor(random() * 10000 + 1)::int, \r\n    floor(random() * 10000 + 1)::int, \r\n    (ARRAY[\u0027Confirmed\u0027, \u0027Cancelled\u0027, \u0027Waitlist\u0027])[floor(random() * 3 + 1)]\r\nFROM generate_series(1, 10000) AS s(i);\r\n\r\n\r\n\r\n\r\n\r\n\r\nWITH ConfirmedEnrollments AS (\r\n\r\n    SELECT \r\n        m.FullName AS ClientName,\r\n        ms.TypeName AS MembershipType,\r\n        fc.ClassName,\r\n        t.TrainerName,\r\n        fc.ClassDate\r\n    FROM Enrollments e\r\n    JOIN Members m ON e.MemberID \u003d m.MemberID\r\n    JOIN Memberships ms ON m.MembershipID \u003d ms.MembershipID\r\n    JOIN FitnessClasses fc ON e.ClassID \u003d fc.ClassID\r\n    JOIN Trainers t ON fc.TrainerID \u003d t.TrainerID\r\n    WHERE e.Status \u003d \u0027Confirmed\u0027\r\n)\r\nSELECT \r\n    ClientName,\r\n    MembershipType,\r\n    COUNT(ClassName) AS TotalClasses,\r\n    COUNT(DISTINCT TrainerName) AS UniqueTrainersCount\r\nFROM ConfirmedEnrollments\r\n\r\nWHERE ClassDate \u003e\u003d \u00272026-06-01 00:00:00\u0027 \r\nGROUP BY \r\n    ClientName, \r\n    MembershipType\r\n\r\nORDER BY \r\n    TotalClasses DESC, \r\n    ClientName ASC\r\nLIMIT 100;\r\n\r\nSELECT \r\n    FullName AS PersonName, \r\n    Email AS ContactInfo, \r\n    \u0027Клієнт\u0027 AS Role \r\nFROM Members\r\nUNION ALL\r\nSELECT \r\n    TrainerName AS PersonName, \r\n    Specialization AS ContactInfo, \r\n    \u0027Тренер\u0027 AS Role \r\nFROM Trainers\r\nLIMIT 100\"",
+							"mappingType": "create",
+							"attributes": {
+								"Updated Rows": {
+									"targetName": "\"Updated Rows\"",
+									"mappingType": "create"
+								},
+								"Execute time": {
+									"targetName": "\"Execute time\"",
+									"mappingType": "create"
+								},
+								"Start time": {
+									"targetName": "\"Start time\"",
+									"mappingType": "create"
+								},
+								"Finish time": {
+									"targetName": "\"Finish time\"",
+									"mappingType": "create"
+								},
+								"Query": {
+									"targetName": "\"Query\"",
+									"mappingType": "create"
+								}
+							}
+						}
+					}
+				},
+				"producer": "database_producer",
+				"consumer": "database_consumer",
+				"processor": "stream.csv",
+				"processors": {
+					"stream_producer:stream.csv": {
+						"@propNames": "trimWhitespaces,escapeChar,quoteChar,extension,columnTypeMinimalLength,delimiter,columnTypeSamplesCount,strictQuotes,header,timestampFormat,encoding,",
+						"trimWhitespaces": "false",
+						"escapeChar": "\\",
+						"quoteChar": "\"",
+						"extension": "csv,tsv,txt",
+						"columnTypeMinimalLength": "50",
+						"delimiter": ",",
+						"columnTypeSamplesCount": "100",
+						"strictQuotes": "false",
+						"header": "top",
+						"timestampFormat": "yyyy-MM-dd[ HH:mm:ss[.SSS]]",
+						"encoding": "utf-8"
+					}
+				}
+			},
+			"taskContext": {
+				"defaultCatalog": "postgres",
+				"defaultSchema": "public",
+				"autoCommit": true,
+				"transactionIsolation": 0
+			}
+		}
+	}
+}
